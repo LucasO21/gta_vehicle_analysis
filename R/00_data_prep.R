@@ -1,5 +1,5 @@
-# GTA ANALYSIS PROJECT ----
-# DATA PREP SCRIPT ----
+# SCRIPT TOPIC:  GTA ANALYSIS PROJECT ----
+# SCRIPT: NOTES: DATA PREP SCRIPT ----
 # **** ----
 
 # **********************************************************************************************
@@ -24,7 +24,7 @@ library(DBI)
 
 # * Setup DB Connection ----
 #   - Setup SQL Lite DB ----
-con <- dbConnect(RSQLite::SQLite(), dbname = "../data/database.db")
+# con <- dbConnect(RSQLite::SQLite(), dbname = "../data/database.db")
 
 # * DB Commands ----
 # dbListTables(con)
@@ -166,6 +166,30 @@ combined_clean_tbl %>% View()
 # ******************************************************************************
 dbWriteTable(con, "no_data_links", no_data_links_tbl, overwrite = TRUE)
 dbWriteTable(con, "clean_data", combined_clean_tbl, overwrite = TRUE)
- 
 
+
+# ******************************************************************************
+# ADD UPGRADE COST TO DATA ----
+# ******************************************************************************
+
+# * Import Upgrade Cost Data ----
+upgrade_cost_1 <- read_csv("../data/csv/gta_data_upgrade_cost_1.csv") %>% as_tibble()
+
+upgrade_cost_2 <- read_csv("../data/csv/gta_data_upgrade_cost_2.csv") %>% as_tibble()
+
+# * Clean Upgrade Cost Data ----
+upgrade_cost_tbl <- bind_rows(
+    upgrade_cost_1,
+    upgrade_cost_2
+) %>% 
+    select(-...1) %>% 
+    mutate(
+        upgrade_cost = upgrade_cost %>% 
+            str_remove_all("[^[:digit:]]") %>% 
+            str_trim() %>% 
+            as.numeric()
+    )
+
+# * Save Upgrade Cost Data to DB ----
+dbWriteTable(con, "upgrade_cost", upgrade_cost_tbl, overwrite = TRUE)
 
