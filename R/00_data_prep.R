@@ -20,14 +20,13 @@ library(DBI)
 
 # **********************************************************************************************
 # SETUP DB ----
-# - Setup SQL Lite DB to hold data. Save csv file to DB
 # **********************************************************************************************
 
 # * Setup DB Connection ----
+#   - Setup SQL Lite DB ----
 con <- dbConnect(RSQLite::SQLite(), dbname = "../data/database.db")
 
-# * Save CSV to DB ----
-# dbWriteTable(con, "retail_data_raw", read.csv("../data/online_retail_II.csv"))
+# * DB Commands ----
 # dbListTables(con)
 # dbDisconnect()
 # tbl(con, "table_name")
@@ -160,8 +159,6 @@ combined_clean_tbl <- combined_tbl %>%
 # Checks 
 combined_clean_tbl %>% glimpse()
 combined_clean_tbl %>% View()
-
-combined_tbl %>% filter(str_detect(title, "Karin 190z")) %>% View()
 
 
 # ******************************************************************************
