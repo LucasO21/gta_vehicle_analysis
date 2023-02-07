@@ -139,7 +139,7 @@ combined_clean_tbl <- combined_tbl %>%
     # ** Statistics ----
     mutate_at(
         vars(speed, acceleration, braking, handling, overall), 
-        ~ str_remove_all(., "[^[:digit:]]")
+        ~ str_remove_all(., "[a-zA-Z]")
     ) %>% 
     
     # ** Trim ----
