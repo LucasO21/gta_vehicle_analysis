@@ -14,7 +14,7 @@ library(tidyverse)
 library(janitor)
 library(lubridate)
 library(DBI)
-library(ggridges)
+library(plotly)
 
 # *************************************************************************
 # DATA IMPORT ----
@@ -138,7 +138,7 @@ get_boxplots <- function(data, x_var, y_var, fill_var, x_var_format = "dollar",
     ggplot(aes({{x_var}}, {{y_var}}, fill = {{fill_var}}))+
     geom_boxplot(show.legend = FALSE)+
     theme_bw()+
-    scale_fill_brewer(palette = "Set3")
+    scale_fill_brewer(palette = "Paired")
   
   if (x_var_format == "dollar") {
     p <- p +
@@ -178,7 +178,8 @@ get_facet_barplot <- function(data, x_var, y_var, fill_var, x_var_format = "doll
     p <- p +
       scale_x_continuous(labels = scales::percent_format())
   } else {
-    p <- P
+    p <- p+
+      scale_x_continuous(labels = scales::comma_format())
   }
   
   return(p)
@@ -260,31 +261,6 @@ p4 <- gta_final_tbl %>%
 
 p4 %>% save_plot(filename = "p4_price_by_class")
 
-# ** Price vs Manufacturer ----
-# top_10_price_manufacturer_list <- gta_final_tbl %>% 
-#     filter(!manufacturer %in% c("RUNE", "Vysser")) %>% 
-#     group_by(manufacturer) %>% 
-#     summarise(mean_price = mean(price)) %>% 
-#     ungroup() %>% 
-#     arrange(desc(mean_price)) %>% 
-#     slice(1:10) %>% 
-#     mutate(manufacturer = fct_reorder(manufacturer, mean_price)) %>% 
-#     pull(manufacturer)
-# 
-# gta_final_tbl %>% 
-#   filter(manufacturer %in% top_10_price_manufacturer_list) %>% 
-#   ggplot(aes(price, as.factor(manufacturer), fill = manufacturer))+
-#   geom_boxplot(show.legend = FALSE)+
-#   scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, prefix = "$", suffix = "M"))+
-#   theme_minimal()+
-#   get_custom_theme()+
-#   scale_fill_brewer(palette = "Paired")+
-#   labs(
-#       title = "Grotti Caters To A Wide Price Range",
-#       subtitle = "",
-#       x = NULL, y = NULL
-#   )
-
 # * Top 5 Expensive Cars by Vehicle Class ----
 gta_final_tbl %>% distinct(vehicle_class)
 
@@ -298,40 +274,32 @@ top_5_title_by_class_price_tbl <- gta_final_tbl %>%
   mutate(title = fct_reorder(title, price))
 
 top_5_title_by_class_price_tbl %>% 
-  ggplot(aes(price, title, fill = vehicle_class))+
-  geom_col()+
-  facet_wrap(~vehicle_class, ncol = 2, scales = "free_y")+
-  scale_fill_brewer(palette = "Paired")+
-  scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, prefix = "$", suffix = "M"))+
-  theme_classic()+
-  get_custom_theme(axis_text_size = 10)+
-  theme(legend.position = "None")+
+  get_facet_barplot(price, title, vehicle_class)+
+  get_custom_theme(axis_text_size = 9)+
   labs(
     title = "Top 5 Expensive Vehicles by Vehicle Class",
+    subtitle = "Grotti Itali RSX (Sports) is the most expensive car at about $3.5M",
     x = "Price (Millions of Dollars)", y = NULL
   )
 
+gta_final_tbl %>% select(title, price) %>% arrange(desc(price))
 
-
-top_5_title_by_class_price_tbl %>% 
-  get_facet_barplot(
-    x_var = price, y_var = title, fill_var = vehicle_class
-  )+
-  get_custom_theme(axis_text_size = 9)
 
 # * Upgrade Cost vs Vehicle Class ----
 gta_final_tbl %>% 
   select(vehicle_class, upgrade_cost) %>% 
   filter(upgrade_cost <= 1000000) %>% 
-  ggplot(aes(upgrade_cost, vehicle_class, fill = vehicle_class))+
-  geom_boxplot(show.legend = FALSE)+
-  scale_x_continuous(labels = scales::dollar_format(scale = 1e-3, prefix = "$", suffix = "K"))+
-  theme_classic()+
+  get_boxplots(
+    x_var    = upgrade_cost, 
+    y_var    = vehicle_class, 
+    fill_var = vehicle_class,
+    scale    = 1e-3, 
+    suffix   = "K"
+  )+
   get_custom_theme(axis_text_size = 10)+
-  scale_fill_brewer(palette = "Paired")+
   labs(
-    title    = "",
-    subtitle = "",
+    title    = "Upgrade Cost by Vehicle Class",
+    subtitle = "Compact vehicles tend to have a surprisingly high upgrade cost",
     x = "Upgrade Cost", y = NULL
   )
 
@@ -342,12 +310,26 @@ resale_value_tbl <- gta_final_tbl %>%
   mutate(resale_value = resale_price_upgraded / (price + upgrade_cost))
 
 resale_value_tbl %>% 
-  ggplot(aes(resale_value, vehicle_class, fill = vehicle_class))+
-  geom_boxplot(show.legend = FALSE)+
-  scale_x_continuous(labels = scales::percent_format())+
-  theme_bw()+
-  #get_custom_theme(axis_text_size = 10)+
-  scale_fill_brewer(palette = "Paired")+
+  group_by(vehicle_class) %>% 
+  arrange(desc(resale_value)) %>% 
+  slice(1:5) %>% 
+  ungroup() %>% 
+  mutate(vehicle_class = as.factor(vehicle_class)) %>% 
+  mutate(title = fct_reorder(title, resale_value)) %>% 
+  get_facet_barplot(
+    x_var = resale_value,
+    y_var = title,
+    fill_var = vehicle_class,
+    x_var_format = "percent"
+  )+
+  get_custom_theme(axis_text_size = 9)+
+  labs(
+    title = "Resale Value vs Vehicle Class",
+    subtitle = "These vehicles offer the best bank for your buck (after fully upgrading)",
+    x = "Resale Value (as a % of purchase price + upgrade cost)"
+  )
+  
+ 
   labs(
     title    = "Median Resale Value For Super Cars Is Above 57%",
     subtitle = "Motorcycles have the lowest resale value",
@@ -355,140 +337,131 @@ resale_value_tbl %>%
   )
   
 
-
-top_5_title_by_class_price_tbl %>% 
-  get_boxplots(x_var = price, y_var = vehicle_class, fill_var = vehicle_class)+
-  get_custom_theme()
-  
-  
 # SPEED ----
+# - Top speed in game does not always translate to the best speed on the race track
 
 # Top 10 Lap Time by Vehicle Class ----
 gta_final_tbl %>% 
-  select(title, vehicle_class, lap_time) %>% 
+  select(title, vehicle_class, top_speed_in_game) %>% 
   group_by(vehicle_class) %>% 
-  arrange(lap_time, .by_group = TRUE) %>% 
+  arrange(top_speed_in_game, .by_group = TRUE) %>% 
   slice(1:5) %>% 
   ungroup() %>% 
-  mutate(
-    vehicle_class = as.factor(vehicle_class),
-    title = fct_reorder(title, lap_time) %>% fct_rev()
-    ) %>% 
-  # mutate(title = fct_reorder(title, lap_time)) %>% 
-  # mutate(vehicle_class = as.factor(vehicle_class)) %>% 
-  # mutate(vehicle_class = fct_rev(vehicle_class)) %>% 
-  ggplot(aes(lap_time, title, fill = vehicle_class))+
-  geom_col(width = 0.8, show.legend = FALSE)+
-  facet_wrap(~vehicle_class, ncol = 2, scales = "free_y")+
-  get_custom_theme()+
-  scale_fill_brewer(palette = "Paired")+
-  
-  
+  mutate(vehicle_class = as.factor(vehicle_class)) %>% 
+  mutate(title = fct_reorder(title, top_speed_in_game)) %>% 
+  get_facet_barplot(
+    x_var = top_speed_in_game,
+    y_var = title,
+    fill_var = vehicle_class,
+    x_var_format = "comma"
+  )+
+  get_custom_theme(axis_text_size = 9)+
+  labs(
+    title = "Top Speed vs Vehicle Class",
+    x = "Top Speed (MPH)", x = NULL
+  )
     
-
-
-
-
-
-
   
-
-
 # MULTIVARIATE ----
 
 # * Price vs Speed ---- 
 correlation <- round(cor(gta_final_tbl$speed, gta_final_tbl$price), 2)
 
-gta_final_tbl %>% 
-  select(speed, price, vehicle_class) %>% 
+speed_price_tbl <- gta_final_tbl %>% 
+  select(speed, price, title, vehicle_class) %>% 
+  mutate(label_text = str_glue("
+                               Title: {title}
+                               Vehicle Class: {vehicle_class}
+                               Speed (MPH): {speed}
+                               Price: {price %>% scales::dollar()}
+                               "))
+
+p <- speed_price_tbl %>% 
   ggplot(aes(speed, price, color = vehicle_class))+
   geom_point(size = 2.5, alpha = 0.8)+
   scale_y_continuous(labels = scales::dollar_format(scale = 1e-6, prefix = "$", suffix = "M"))+
-  theme_classic()+
+  theme_bw()+
   get_custom_theme()+
-  scale_color_brewer(palette = "Set3")+
+  scale_color_brewer(palette = "Paired")+
   labs(
     title = "Fast Cars Cost Money",
     subtitle = str_glue("Speed has a {correlation} correlation with price"),
-    x = "Speed", y = "Price"
+    x = "Speed (MPH)", y = "Price"
   )
-  
 
 
 
     
 
-# Price vs Release DLC ----
-gta_final_tbl %>% 
-    group_by(release_dlc) %>% 
-    summarise(price = mean(price)) %>% 
-    ungroup() %>% 
-    ggplot(aes(release_dlc, price))+
-    geom_col()+
-    theme(
-        axis.text.x = element_text(angle = 25, hjust = 1)
-    )+
+
   
 
 
 # CORRELATIONS ----
-gta_final_tbl %>% View()
-
-gta_final_tbl %>%
-  select_if(is.numeric) %>% 
-  select(-c(top_speed_in_game, top_speed_real, starts_with("resale"))) %>% 
-  drop_na() %>% 
-  cor() %>% 
-  round(digits = 2) %>% 
-  reshape2::melt() %>% 
-  ggplot(aes(Var1, Var2, fill = value))+
-  geom_tile()+
-  geom_text(aes(label = value))+
-  theme_classic()+
-  get_custom_theme()+
-  theme(
-      axis.text.x = element_text(angle = 25, hjust = 1)
-  )+
-  scale_fill_gradient(low = "#fdb462", high = "#8dd3c7")
+# gta_final_tbl %>% View()
+# 
+# gta_final_tbl %>%
+#   select_if(is.numeric) %>% 
+#   select(-c(top_speed_in_game, top_speed_real, starts_with("resale"))) %>% 
+#   drop_na() %>% 
+#   cor() %>% 
+#   round(digits = 2) %>% 
+#   reshape2::melt() %>% 
+#   ggplot(aes(Var1, Var2, fill = value))+
+#   geom_tile()+
+#   geom_text(aes(label = value))+
+#   theme_classic()+
+#   get_custom_theme()+
+#   theme(
+#       axis.text.x = element_text(angle = 25, hjust = 1)
+#   )+
+#   scale_fill_gradient(low = "#fdb462", high = "#8dd3c7")
 
 
 
 # *************************************************************************
-# MODELING ----
+# PRICE ANALYSIS ----
 # *************************************************************************
 
-# - Predicting price of vehicles based on selected features
+# Price Analysis Data ----
+price_analysis_tbl <- gta_final_tbl %>% 
+  select(release_dlc, release_date, title, vehicle_class, price) %>% 
+  mutate(release_dlc_code = substr(release_dlc, 1, 4) %>% as.numeric) %>% 
+  mutate(release_date = lubridate::ymd(release_date)) %>% 
+  mutate(release_quarter = paste0(
+    lubridate::year(release_date),
+    "-",
+    "Q",
+    lubridate::quarter(release_date)
+  )) %>% 
+  mutate(release_quarter = fct_reorder(release_quarter, release_dlc_code)) %>% 
+  mutate(release_year = lubridate::year(release_date)) 
 
-gta_final_tbl %>% glimpse()
-
+# Price vs Release DLC ----
 gta_final_tbl %>% 
-  select(price, count_features, seats, weight_in_kg, gears, lap_time, 
-         starts_with("Weapon"), speed, overall, vehicle_class, drive_train) %>% 
+  group_by(release_dlc) %>% 
+  summarise(price = mean(price)) %>% 
+  ungroup() %>% 
+  ggplot(aes(release_dlc, price))+
+  geom_col()+
+  theme(
+    axis.text.x = element_text(angle = 25, hjust = 1)
+  )
+
+# Mean Price vs Vehicle Class ----
+price_analysis_tbl %>% 
+  group_by(release_year, vehicle_class) %>% 
+  summarise(mean_price = mean(price)) %>% 
+  ungroup() %>% 
+  
+  ggplot(aes(release_year, mean_price, color = vehicle_class))+
+  geom_line(linewidth = 1)+
+  scale_x_continuous(breaks = unique(price_analysis_tbl$release_year))+
+  scale_y_continuous(labels = scales::dollar_format(scale = 1e-6, prefix = "$", suffix = "M"))+
+  facet_wrap(~vehicle_class, ncol = 2)+
+  get_custom_theme(axis_text_size = 9)
+ 
 
 
 
-# *************************************************************************
-# K MEANS CLUSTERING ----
-# *************************************************************************
-
-# * Scale ----
-price_overall_scaled_tbl <- gta_final_tbl %>% 
-  select(price, overall) %>% 
-  sapply(function(x)(x - min(x, na.rm = T)) / (max(x, na.rm = T) - min(x, na.rm=T)))
-
-# * Within Sum of Squares ----
-set.seed(100)
-vec <- vector()
-for (i in 1:10) price_overall_wcss[i] <- sum(kmeans(price_overall_scaled_tbl, nstart = 100, i)$withinss)
-
-
-# *************************************************************************
-# SECTION NAME ----
-# *************************************************************************
-
-
-library(RColorBrewer)
-scales::show_col(brewer.pal(n = 8, name = "Set3"))
-
-
-
+  
