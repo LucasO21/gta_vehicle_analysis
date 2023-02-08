@@ -3,35 +3,36 @@
 # *** ----
 
 # *************************************************************************
-# SETUP ----
+# 1.0 SETUP ----
 # *************************************************************************
 
-# * Set Working Dir ----
+# 1.1 Set Working Dir ----
 setwd(here::here("R"))
 
-# * Libraries ----
+# 1.2 Libraries ----
 library(tidyverse)
 library(janitor)
 library(lubridate)
 library(DBI)
-library(plotly)
+library(ragg)
+
 
 # *************************************************************************
-# DATA IMPORT ----
+# 2.0 DATA IMPORT ----
 # *************************************************************************
 
-# * DB Connection ----
+# 2.1 DB Connection ----
 con <- dbConnect(RSQLite::SQLite(), dbname = "../data/database.db")
 
 dbListTables(con)
 
-# * Load Data ----
+# 2.2 Load Data ----
 gta_tbl          <- tbl(con, "clean_data") %>% collect()
 upgrade_cost_tbl <- tbl(con, "upgrade_cost") %>% collect()
 links            <- tbl(con, "no_data_links")
 
 # *************************************************************************
-# DATA FILTERING ----
+# 3.0 DATA FILTERING ----
 # *************************************************************************
 gta_final_tbl <- gta_tbl %>% 
     filter(!vehicle_class %in% c("Planes", "Military", "Emergency", "Open Wheel",
@@ -51,7 +52,7 @@ gta_final_tbl %>% count(acquisition, sort = TRUE)
 
 
 # *************************************************************************
-# QUESTIONS ----
+# 4.0 QUESTIONS ----
 # *************************************************************************
 
 # COUNTS
@@ -71,12 +72,11 @@ gta_final_tbl %>% count(acquisition, sort = TRUE)
 # ARTICLE
 
 
-
 # *************************************************************************
-# FUNCTIONS ----
+# 5.0 FUNCTIONS ----
 # *************************************************************************
 
-# ** Count by Feature ----
+# 5.1 Count by Feature ----
 get_count_by_feature <- function(data, var, lab_format = "percent", accuracy = 0.1) {
     
     df <- data %>% 
@@ -97,20 +97,21 @@ get_count_by_feature <- function(data, var, lab_format = "percent", accuracy = 0
     return(df)
 }
 
-# Axis Theme ----
-get_custom_theme <- function(axis_text_size = 12) {
+# 5.2 Axis Theme ----
+get_custom_theme <- function(title_text_size = 14, subtitle_text_size = 12,
+                             axis_text_size = 12) {
     
     theme_bw()+
     theme(
-        plot.title    = element_text(size = 14, face = "bold"),
-        plot.subtitle = element_text(size = 12),
+        plot.title    = element_text(size = title_text_size, face = "bold"),
+        plot.subtitle = element_text(size = subtitle_text_size),
         axis.text     = element_text(size = axis_text_size, color = "black"),
         axis.title    = element_text(size = 9, color = "grey40")
     )
     
 }
 
-# Count Plot ----
+# 5.3 Count Plot ----
 get_count_plot <- function(data, var) {
     
     p <- data %>% 
@@ -120,17 +121,11 @@ get_count_plot <- function(data, var) {
             aes(label = label_text),
             size = 4.5, fontface = "bold", hjust = 1, nudge_x = -0.5
         )
-        # theme_classic()+
-        # theme(
-        #     plot.title = element_text(size = 14, face = "bold"),
-        #     plot.subtitle = element_text(size = 12),
-        #     axis.text = element_text(size = 12)
-        # )
     
     return(p)
 }
 
-# ** Box Plot ----
+# 5.4 Box Plot ----
 get_boxplots <- function(data, x_var, y_var, fill_var, x_var_format = "dollar",
                          scale = 1e-6, prefix = "$", suffix = "M") {
   
@@ -158,7 +153,7 @@ get_boxplots <- function(data, x_var, y_var, fill_var, x_var_format = "dollar",
   
 }
 
-# ** Faceted Bar Plot ----
+# 5.5 Faceted Bar Plot ----
 get_facet_barplot <- function(data, x_var, y_var, fill_var, x_var_format = "dollar", 
                               scale = 1e-6, prefix = "$", suffix = "M") {
   
@@ -167,7 +162,8 @@ get_facet_barplot <- function(data, x_var, y_var, fill_var, x_var_format = "doll
     geom_col(show.legend = FALSE)+
     facet_wrap(~vehicle_class, ncol = 2, scales = "free_y")+
     scale_fill_brewer(palette = "Paired")+
-    scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, prefix = "$", suffix = "M"))
+    scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, prefix = "$", 
+                                                      suffix = "M"))
   
   if (x_var_format == "dollar") {
     p <- p +
@@ -187,83 +183,91 @@ get_facet_barplot <- function(data, x_var, y_var, fill_var, x_var_format = "doll
   
 }
 
-# ** Save ----
-save_plot <- function(plot, filename, .dpi = 300, .width = 8, .height = 6) {
+# 5.6 Save ----
+save_plot <- function(plot, filename, res = 300, width = 6, height = 4, scaling = 0.3) {
     
-    png(filename = paste0("../png/", filename, ".png"), width = .width, height = .height,
-        units = "in", res = .dpi)
-    
-    print(plot)
-    dev.off()
+    # png(filename = paste0("../png/", filename, ".png"), width = .width, height = .height,
+    #     units = "in", res = .dpi)
+    # 
+    # print(plot)
+    # dev.off()
+  
+  pngfile <- paste0("../png/", filename, ".png")
+  agg_png(pngfile, width = 1011, height = 769, units = "px", res = 300)
+  
+  ggsave(
+    pngfile, plot = plot, device = agg_png, width = width, height = height, 
+    units = "cm", res = res, scaling = scaling
+  )
+  
 }
 
 # *************************************************************************
-# EXPLANATORY DATA ANALYSIS ----
+# 7.0 EXPLANATORY DATA ANALYSIS ----
 # *************************************************************************
 
-# * Counts ----
+# 7.1 COUNTS ----
 
-# ** Count by Class ----
+# 7.1.2 Count by Class ----
 p1 <- gta_final_tbl %>% 
-    get_count_by_feature(var = vehicle_class, lab_format = "percent") %>% 
-    get_count_plot(var = vehicle_class)+
-    labs(
-        title    = "Count of Vehicles by Vehicle Class",
-        subtitle = "Sports, Muscle & Super car categories make up 48% of vehicles",
-        x = "Number of Vehicles", y = NULL
-    )+
-  get_custom_theme(axis_text_size = 10)
-
-p1 %>% save_plot(filename = "p1_count_by_class")
-
-# ** Count by Manufacturer ----
-p2 <- gta_final_tbl %>% 
-    get_count_by_feature(var = manufacturer, lab_format = "percent") %>% 
-    slice(1:10) %>% 
-    get_count_plot(var = manufacturer)+
-    labs(
-        title = "Count Of Vehicles by Manufacturer",
-        subtitle = "These 10 manufacturers produce almost 50% of vehicles",
-        x = "Number of Vehicles", y = NULL
-    )+
-  get_custom_theme(axis_text_size = 10)
-
-p2 %>% save_plot(filename = "p2_count_by_manufacturer")
-
-# ** Count by DLC ----
-# - 28% of vehicles released in 1.01 Game Launch
-p3 <- gta_final_tbl %>% 
-    filter(!release_dlc == "1.01 Game Launch") %>% 
-    get_count_by_feature(var = release_dlc, lab_format = "percent") %>% 
-    slice(1:10) %>% 
-    get_count_plot(var = release_dlc)+
-    labs(
-        title = "Count Of Vehicles by Release DLC",
-        subtitle = "Excludes 116 vehicles or (28%) of total GTA V vehicles released at game launch ",
-        x = "Number of Vehicles", y = NULL
-    )+
-  get_custom_theme(axis_text_size = 10)
-
-p3 %>% save_plot(filename = "p3_count_by_release_dlc")
-
-
-# * PRICE ----
-
-# ** Price vs Class Distribution ----
-p4 <- gta_final_tbl %>% 
-  get_boxplots(x_var = price, y_var = vehicle_class, fill_var = vehicle_class, x_var_format = "dollar")+
-  get_custom_theme(axis_text_size = 10)+
+  get_count_by_feature(var = vehicle_class, lab_format = "percent") %>% 
+  get_count_plot(var = vehicle_class)+
+  get_custom_theme(title_text_size = 15, subtitle_text_size = 13, axis_text_size = 11)+
   labs(
-      title = "Super Cars Are Pricey",
-      subtitle = "The lower quartile for super cars is higher than the median price of all other vehicle classes",
-      x = "Vehicle Price", y = NULL
+      title    = "Count of Vehicles by Class",
+      subtitle = "Sports, Muscle & Super car categories make up 48% of vehicles",
+      x = NULL, y = NULL
   )
 
-p4 %>% save_plot(filename = "p4_price_by_class")
+save_plot(p1, "p1_count_by_class", scaling = 0.35)
 
-# * Top 5 Expensive Cars by Vehicle Class ----
-gta_final_tbl %>% distinct(vehicle_class)
+# 7.1.3 Count by Manufacturer ----
+p2 <- gta_final_tbl %>% 
+  get_count_by_feature(var = manufacturer, lab_format = "percent") %>% 
+  slice(1:10) %>% 
+  get_count_plot(var = manufacturer)+
+  get_custom_theme(title_text_size = 15, subtitle_text_size = 13, axis_text_size = 11)+
+  labs(
+      title = "Count Of Vehicles by Manufacturer",
+      subtitle = "These 10 manufacturers produce almost 50% of vehicles",
+      x = NULL, y = NULL
+  )
 
+save_plot(p2, "p2_count_by_manufacturer", scaling = 0.35)
+
+# 7.1.4 Count by DLC ----
+# - 28% of vehicles released in 1.01 Game Launch
+p3 <- gta_final_tbl %>% 
+  filter(!release_dlc == "1.01 Game Launch") %>% 
+  get_count_by_feature(var = release_dlc, lab_format = "percent") %>% 
+  slice(1:10) %>% 
+  get_count_plot(var = release_dlc)+
+  get_custom_theme(title_text_size = 15, subtitle_text_size = 13, axis_text_size = 11)+
+  labs(
+      title = "Top 10 DLCs",
+      subtitle = "In terms of number of vehicles released.",
+      x = NULL, y = NULL
+  )
+
+p3 %>% save_plot(filename = "p3_count_by_release_dlc", scaling = 0.35, width = 8, height = 6)
+
+
+# 7.2 PRICE ----
+
+# 7.2.1 Price vs Class Distribution ----
+p4 <- gta_final_tbl %>% 
+  get_boxplots(x_var = price, y_var = vehicle_class, fill_var = vehicle_class, x_var_format = "dollar")+
+  get_custom_theme(title_text_size = 15, subtitle_text_size = 13, axis_text_size = 10)+
+  labs(
+      title = "Price Distribution vs Vehicle Class",
+      #subtitle = "The lower quartile for super cars is higher than the median price of all other vehicle classes",
+      x = NULL, y = NULL
+  )
+
+p4 %>% save_plot(filename = "p4_price_by_class", scaling = 0.35)
+
+
+# 7.2.2 Top 5 Expensive Cars by Vehicle Class ----
 top_5_title_by_class_price_tbl <- gta_final_tbl %>% 
   select(title, vehicle_class, price) %>% 
   group_by(vehicle_class) %>% 
@@ -273,33 +277,28 @@ top_5_title_by_class_price_tbl <- gta_final_tbl %>%
   mutate(vehicle_class = as.factor(vehicle_class)) %>% 
   mutate(title = fct_reorder(title, price))
 
-top_5_title_by_class_price_tbl %>% 
+p5 <- top_5_title_by_class_price_tbl %>% 
   get_facet_barplot(price, title, vehicle_class)+
-  get_custom_theme(axis_text_size = 9)+
+  get_custom_theme(title_text_size = 15, subtitle_text_size = 12, axis_text_size = 9)+
   labs(
     title = "Top 5 Expensive Vehicles by Vehicle Class",
-    subtitle = "Grotti Itali RSX (Sports) is the most expensive car at about $3.5M",
-    x = "Price (Millions of Dollars)", y = NULL
+    #subtitle = "Grotti Itali RSX (Sports) is the most expensive car at about $3.5M",
+    x = NULL, y = NULL
   )
 
-gta_final_tbl %>% select(title, price) %>% arrange(desc(price))
+p5 %>% save_plot(filename = "p5_title_class_price_top_5", scaling = 0.1)
 
 
-# * Upgrade Cost vs Vehicle Class ----
+# 7.2.3 Upgrade Cost vs Vehicle Class ----
 gta_final_tbl %>% 
   select(vehicle_class, upgrade_cost) %>% 
   filter(upgrade_cost <= 1000000) %>% 
-  get_boxplots(
-    x_var    = upgrade_cost, 
-    y_var    = vehicle_class, 
-    fill_var = vehicle_class,
-    scale    = 1e-3, 
-    suffix   = "K"
-  )+
-  get_custom_theme(axis_text_size = 10)+
+  get_boxplots(x_var = upgrade_cost, y_var = vehicle_class, fill_var = "grey",
+               scale    = 1e-3, suffix   = "K")+
+  get_custom_theme(title_text_size = 15, subtitle_text_size = 13, axis_text_size = 11)+
   labs(
     title    = "Upgrade Cost by Vehicle Class",
-    subtitle = "Compact vehicles tend to have a surprisingly high upgrade cost",
+    #subtitle = "Compact vehicles tend to have a surprisingly high upgrade cost",
     x = "Upgrade Cost", y = NULL
   )
 
@@ -316,17 +315,13 @@ resale_value_tbl %>%
   ungroup() %>% 
   mutate(vehicle_class = as.factor(vehicle_class)) %>% 
   mutate(title = fct_reorder(title, resale_value)) %>% 
-  get_facet_barplot(
-    x_var = resale_value,
-    y_var = title,
-    fill_var = vehicle_class,
-    x_var_format = "percent"
-  )+
+  get_facet_barplot(x_var = resale_value, y_var = title, fill_var = "grey",
+                    x_var_format = "percent")+
   get_custom_theme(axis_text_size = 9)+
   labs(
     title = "Resale Value vs Vehicle Class",
-    subtitle = "These vehicles offer the best bank for your buck (after fully upgrading)",
-    x = "Resale Value (as a % of purchase price + upgrade cost)"
+    #subtitle = "These vehicles offer the best bank for your buck (after fully upgrading)",
+    x = "Resale Value (as a % of purchase price + upgrade cost)", y = NULL
   )
   
  
@@ -392,76 +387,3 @@ p <- speed_price_tbl %>%
 
 
     
-
-
-  
-
-
-# CORRELATIONS ----
-# gta_final_tbl %>% View()
-# 
-# gta_final_tbl %>%
-#   select_if(is.numeric) %>% 
-#   select(-c(top_speed_in_game, top_speed_real, starts_with("resale"))) %>% 
-#   drop_na() %>% 
-#   cor() %>% 
-#   round(digits = 2) %>% 
-#   reshape2::melt() %>% 
-#   ggplot(aes(Var1, Var2, fill = value))+
-#   geom_tile()+
-#   geom_text(aes(label = value))+
-#   theme_classic()+
-#   get_custom_theme()+
-#   theme(
-#       axis.text.x = element_text(angle = 25, hjust = 1)
-#   )+
-#   scale_fill_gradient(low = "#fdb462", high = "#8dd3c7")
-
-
-
-# *************************************************************************
-# PRICE ANALYSIS ----
-# *************************************************************************
-
-# Price Analysis Data ----
-price_analysis_tbl <- gta_final_tbl %>% 
-  select(release_dlc, release_date, title, vehicle_class, price) %>% 
-  mutate(release_dlc_code = substr(release_dlc, 1, 4) %>% as.numeric) %>% 
-  mutate(release_date = lubridate::ymd(release_date)) %>% 
-  mutate(release_quarter = paste0(
-    lubridate::year(release_date),
-    "-",
-    "Q",
-    lubridate::quarter(release_date)
-  )) %>% 
-  mutate(release_quarter = fct_reorder(release_quarter, release_dlc_code)) %>% 
-  mutate(release_year = lubridate::year(release_date)) 
-
-# Price vs Release DLC ----
-gta_final_tbl %>% 
-  group_by(release_dlc) %>% 
-  summarise(price = mean(price)) %>% 
-  ungroup() %>% 
-  ggplot(aes(release_dlc, price))+
-  geom_col()+
-  theme(
-    axis.text.x = element_text(angle = 25, hjust = 1)
-  )
-
-# Mean Price vs Vehicle Class ----
-price_analysis_tbl %>% 
-  group_by(release_year, vehicle_class) %>% 
-  summarise(mean_price = mean(price)) %>% 
-  ungroup() %>% 
-  
-  ggplot(aes(release_year, mean_price, color = vehicle_class))+
-  geom_line(linewidth = 1)+
-  scale_x_continuous(breaks = unique(price_analysis_tbl$release_year))+
-  scale_y_continuous(labels = scales::dollar_format(scale = 1e-6, prefix = "$", suffix = "M"))+
-  facet_wrap(~vehicle_class, ncol = 2)+
-  get_custom_theme(axis_text_size = 9)
- 
-
-
-
-  
