@@ -190,6 +190,7 @@ upgrade_cost_tbl <- bind_rows(
             as.numeric()
     )
 
+
 # * Save Upgrade Cost Data to DB ----
 dbWriteTable(con, "upgrade_cost", upgrade_cost_tbl, overwrite = TRUE)
 
