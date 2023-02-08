@@ -4,7 +4,4 @@
 .Ruserdata
 /data
 /archive
-/png
-/analysis
-/R/01_analysis
-/R/02_price_analysis
+R/01_analysis.R
